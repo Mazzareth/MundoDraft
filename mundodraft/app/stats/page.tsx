@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { apiClient, type Champion } from '../lib/api';
 import { QueueStatus } from '../components/QueueStatus';
 
@@ -13,11 +14,7 @@ export default function StatsPage() {
 
   const roles = ['ALL', 'TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT'];
 
-  useEffect(() => {
-    fetchChampions();
-  }, [selectedRole, searchTerm]);
-
-  const fetchChampions = async () => {
+  const fetchChampions = useCallback(async () => {
     try {
       const params: {
         role?: string;
@@ -39,7 +36,11 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedRole, searchTerm]);
+
+  useEffect(() => {
+    fetchChampions();
+  }, [fetchChampions]);
 
   return (
     <div className="min-h-screen p-4 bg-gray-900 text-white">
@@ -110,9 +111,11 @@ export default function StatsPage() {
                   >
                     <div className="flex items-center gap-3 mb-3">
                       {champion.image?.url && (
-                        <img
+                        <Image
                           src={champion.image.url}
                           alt={champion.name}
+                          width={48}
+                          height={48}
                           className="w-12 h-12 rounded"
                         />
                       )}

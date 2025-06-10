@@ -4,7 +4,7 @@ export interface ApiResponse<T> {
   success: boolean;
   data: T;
   error?: string;
-  details?: any[];
+  details?: unknown[];
   timestamp?: string;
 }
 
@@ -137,13 +137,13 @@ class ApiClient {
     return this.request<DraftStatus>(`/drafts/${draftId}/status`);
   }
 
-  async startDraft(draftId: string, token?: string): Promise<ApiResponse<any>> {
+  async startDraft(draftId: string, token?: string): Promise<ApiResponse<{ message: string }>> {
     const headers: Record<string, string> = {};
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    return this.request<any>(`/drafts/${draftId}/start`, {
+    return this.request<{ message: string }>(`/drafts/${draftId}/start`, {
       method: 'POST',
       headers,
     });
@@ -154,13 +154,13 @@ class ApiClient {
     championId: string,
     actionType: 'BAN' | 'PICK',
     token?: string
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<{ message: string }>> {
     const headers: Record<string, string> = {};
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    return this.request<any>(`/drafts/${draftId}/select`, {
+    return this.request<{ message: string }>(`/drafts/${draftId}/select`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -204,12 +204,23 @@ class ApiClient {
   }
 
   // Queue endpoints
-  async getGuildQueue(guildId: string, queueType?: string): Promise<ApiResponse<any>> {
+  async getGuildQueue(guildId: string, queueType?: string): Promise<ApiResponse<{
+    queues: Record<string, unknown[]>;
+    stats: {
+      totalPlayers: number;
+      progress: number;
+      isReady: boolean;
+    };
+  }>> {
     const params = queueType ? `?queueType=${queueType}` : '';
     return this.request(`/queues/guild/${guildId}${params}`);
   }
 
-  async getUserQueueStatus(userId: string, guildId: string): Promise<ApiResponse<any>> {
+  async getUserQueueStatus(userId: string, guildId: string): Promise<ApiResponse<{
+    status: string;
+    position?: number;
+    role?: string;
+  }>> {
     return this.request(`/queues/user/${userId}/guild/${guildId}`);
   }
 
@@ -219,7 +230,7 @@ class ApiClient {
     channelId: string;
     role: string;
     queueType?: string;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<{ message: string }>> {
     return this.request('/queues/join', {
       method: 'POST',
       body: JSON.stringify(params),
@@ -229,7 +240,7 @@ class ApiClient {
   async leaveQueue(params: {
     userId: string;
     guildId: string;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<{ message: string }>> {
     return this.request('/queues/leave', {
       method: 'POST',
       body: JSON.stringify(params),
@@ -237,7 +248,11 @@ class ApiClient {
   }
 
   // User endpoints
-  async getUser(userId: string): Promise<ApiResponse<any>> {
+  async getUser(userId: string): Promise<ApiResponse<{
+    id: string;
+    username: string;
+    avatar?: string;
+  }>> {
     return this.request(`/users/${userId}`);
   }
 
@@ -245,7 +260,15 @@ class ApiClient {
     limit?: number;
     offset?: number;
     status?: string;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<{
+    drafts: DraftSession[];
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+  }>> {
     const searchParams = new URLSearchParams();
     if (params?.limit) searchParams.append('limit', params.limit.toString());
     if (params?.offset) searchParams.append('offset', params.offset.toString());
@@ -257,7 +280,14 @@ class ApiClient {
     return this.request(endpoint);
   }
 
-  async getUserChampionStats(userId: string, limit?: number): Promise<ApiResponse<any>> {
+  async getUserChampionStats(userId: string, limit?: number): Promise<ApiResponse<{
+    champions: (Champion & {
+      games_played: number;
+      wins: number;
+      losses: number;
+      kda: number;
+    })[];
+  }>> {
     const params = limit ? `?limit=${limit}` : '';
     return this.request(`/users/${userId}/champions${params}`);
   }
@@ -274,7 +304,7 @@ export const apiClient = new ApiClient();
 // WebSocket connection helper
 export class DraftWebSocket {
   private ws: WebSocket | null = null;
-  private subscribers: Map<string, Set<(data: any) => void>> = new Map();
+  private subscribers: Map<string, Set<(data: unknown) => void>> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -316,11 +346,14 @@ export class DraftWebSocket {
     });
   }
 
-  private handleMessage(data: any) {
-    if (data.type === 'update' && data.channel) {
-      const subscribers = this.subscribers.get(data.channel);
-      if (subscribers) {
-        subscribers.forEach(callback => callback(data.data));
+  private handleMessage(data: unknown) {
+    if (typeof data === 'object' && data !== null && 'type' in data && 'channel' in data) {
+      const messageData = data as { type: string; channel: string; data?: unknown };
+      if (messageData.type === 'update' && messageData.channel) {
+        const subscribers = this.subscribers.get(messageData.channel);
+        if (subscribers) {
+          subscribers.forEach(callback => callback(messageData.data));
+        }
       }
     }
   }
@@ -338,7 +371,7 @@ export class DraftWebSocket {
     }
   }
 
-  subscribe(channel: string, callback: (data: any) => void) {
+  subscribe(channel: string, callback: (data: unknown) => void) {
     if (!this.subscribers.has(channel)) {
       this.subscribers.set(channel, new Set());
     }
@@ -353,7 +386,7 @@ export class DraftWebSocket {
     }
   }
 
-  unsubscribe(channel: string, callback: (data: any) => void) {
+  unsubscribe(channel: string, callback: (data: unknown) => void) {
     const subscribers = this.subscribers.get(channel);
     if (subscribers) {
       subscribers.delete(callback);

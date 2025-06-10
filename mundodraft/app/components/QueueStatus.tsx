@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../lib/api';
 
 interface QueueStatusProps {
@@ -9,9 +9,29 @@ interface QueueStatusProps {
 }
 
 export function QueueStatus({ guildId = "123456789012345678", className = "" }: QueueStatusProps) {
-  const [queueData, setQueueData] = useState<any>(null);
+  const [queueData, setQueueData] = useState<{
+    queues: Record<string, unknown[]>;
+    stats: {
+      totalPlayers: number;
+      progress: number;
+      isReady: boolean;
+    };
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const fetchQueueStatus = useCallback(async () => {
+    try {
+      const response = await apiClient.getGuildQueue(guildId, 'RANKED_DRAFT');
+      setQueueData(response.data);
+      setError('');
+    } catch (error) {
+      console.error('Failed to load queue status:', error);
+      setError('Failed to load queue status');
+    } finally {
+      setLoading(false);
+    }
+  }, [guildId]);
 
   useEffect(() => {
     fetchQueueStatus();
@@ -20,19 +40,8 @@ export function QueueStatus({ guildId = "123456789012345678", className = "" }: 
     const interval = setInterval(fetchQueueStatus, 5000);
     
     return () => clearInterval(interval);
-  }, [guildId]);
+  }, [fetchQueueStatus]);
 
-  const fetchQueueStatus = async () => {
-    try {
-      const response = await apiClient.getGuildQueue(guildId, 'RANKED_DRAFT');
-      setQueueData(response.data);
-      setError('');
-    } catch (_err) {
-      setError('Failed to load queue status');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (

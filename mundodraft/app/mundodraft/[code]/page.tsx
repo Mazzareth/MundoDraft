@@ -1,29 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { DraftSession } from '../../components/DraftSession';
 import { apiClient, type DraftSession as Draft } from '../../lib/api';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     code: string;
-  };
+  }>;
 }
 
 export default function DraftPage({ params }: PageProps) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [code, setCode] = useState<string>('');
   const router = useRouter();
 
-  useEffect(() => {
-    loadDraft();
-  }, [params.code]);
-
-  const loadDraft = async () => {
+  const loadDraft = useCallback(async (draftCode: string) => {
     try {
-      const response = await apiClient.getDraft(params.code.toUpperCase());
+      const response = await apiClient.getDraft(draftCode.toUpperCase());
       setDraft(response.data);
     } catch (err) {
       if (err instanceof Error) {
@@ -38,7 +35,14 @@ export default function DraftPage({ params }: PageProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    params.then((resolvedParams) => {
+      setCode(resolvedParams.code);
+      loadDraft(resolvedParams.code);
+    });
+  }, [params, loadDraft]);
 
   const handleBack = () => {
     router.push('/');
@@ -49,7 +53,7 @@ export default function DraftPage({ params }: PageProps) {
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4">
           <div className="loading-spinner"></div>
-          <div className="text-xl">Loading draft {params.code.toUpperCase()}...</div>
+          <div className="text-xl">Loading draft {code.toUpperCase()}...</div>
         </div>
       </div>
     );

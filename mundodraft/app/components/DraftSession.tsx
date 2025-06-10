@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   apiClient,
   type Champion,
@@ -24,6 +24,40 @@ export function DraftSession({ draft, onBack }: DraftSessionProps) {
 
   const roles = ['ALL', 'TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT'];
 
+  const fetchDraftStatus = useCallback(async () => {
+    try {
+      const response = await apiClient.getDraftStatus(draft.unique_id);
+      setDraftStatus(response.data);
+    } catch (error) {
+      console.error('Failed to fetch draft status:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [draft.unique_id]);
+
+  const fetchChampions = useCallback(async () => {
+    try {
+      const params: {
+        role?: string;
+        search?: string;
+        limit?: number;
+      } = { limit: 50 };
+      
+      if (selectedRole && selectedRole !== 'ALL') {
+        params.role = selectedRole;
+      }
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
+      
+      const response = await apiClient.getChampions(params);
+      setChampions(response.data.champions || []);
+    } catch (error) {
+      console.error('Failed to fetch champions:', error);
+      setError('Failed to load champions');
+    }
+  }, [selectedRole, searchTerm]);
+
   useEffect(() => {
     fetchDraftStatus();
     fetchChampions();
@@ -32,7 +66,7 @@ export function DraftSession({ draft, onBack }: DraftSessionProps) {
     const interval = setInterval(fetchDraftStatus, 2000);
     
     return () => clearInterval(interval);
-  }, [draft.id]);
+  }, [fetchDraftStatus, fetchChampions]);
 
   useEffect(() => {
     // Update timer countdown
@@ -52,43 +86,9 @@ export function DraftSession({ draft, onBack }: DraftSessionProps) {
     }
   }, [draftStatus?.timerEnd]);
 
-  const fetchDraftStatus = async () => {
-    try {
-      const response = await apiClient.getDraftStatus(draft.unique_id);
-      setDraftStatus(response.data);
-    } catch (_err) {
-      console.error('Failed to fetch draft status:', _err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchChampions = async () => {
-    try {
-      const params: {
-        role?: string;
-        search?: string;
-        limit?: number;
-      } = { limit: 50 };
-      
-      if (selectedRole && selectedRole !== 'ALL') {
-        params.role = selectedRole;
-      }
-      if (searchTerm) {
-        params.search = searchTerm;
-      }
-      
-      const response = await apiClient.getChampions(params);
-      setChampions(response.data.champions || []);
-    } catch (_err) {
-      console.error('Failed to fetch champions:', _err);
-      setError('Failed to load champions');
-    }
-  };
-
   useEffect(() => {
     fetchChampions();
-  }, [searchTerm, selectedRole]);
+  }, [fetchChampions]);
 
   const selectChampion = async (championId: string) => {
     if (!draftStatus || draftStatus.status !== 'DRAFTING') return;
